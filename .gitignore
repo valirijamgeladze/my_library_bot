@@ -1,0 +1,33 @@
+# Токены и конфиги
+config.py
+.env
+*.env
+
+# Виртуальное окружение
+venv/
+env/
+ENV/
+.venv/
+
+# Python кэш
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# База данных (если используете SQLite)
+*.db
+*.sqlite3
+
+# Логи
+*.log
