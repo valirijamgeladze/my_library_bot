@@ -102,6 +102,7 @@ class Database:
         return True
 
     def get_book_stats(self, user_id):
+        """Получает статистику по книгам пользователя"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
@@ -116,8 +117,42 @@ class Database:
             WHERE user_id = ? 
             GROUP BY status
         ''', (user_id,))
-
         stats = {status: count for status, count in cursor.fetchall()}
+
+        # Процент прочитанных книг
+        read_count = stats.get('Прочитано', 0)
+        read_percent = round((read_count / total * 100), 1) if total > 0 else 0
+
+        # Топ авторы
+        cursor.execute('''
+            WITH author_counts AS (
+                SELECT 
+                    author, 
+                    COUNT(*) as count
+                FROM books 
+                WHERE user_id = ? AND author IS NOT NULL AND author != ''
+                GROUP BY author
+            ),
+            max_count AS (
+                SELECT MAX(count) as max_count FROM author_counts
+            )
+            SELECT 
+                ac.author,
+                ac.count
+            FROM author_counts ac, max_count mc
+            WHERE ac.count = mc.max_count AND mc.max_count > 1
+            ORDER BY ac.author
+        ''', (user_id,))
+
+        top_authors = cursor.fetchall()
+
+        if not top_authors:
+            top_authors_text = ""
+        elif len(top_authors) == 1:
+            top_authors_text = f"🏆 **Любимый автор:** {top_authors[0][0]} ({top_authors[0][1]} книг)"
+        else:
+            authors_list = ", ".join([a[0] for a in top_authors])
+            top_authors_text = f"🏆 **Любимые авторы:** {authors_list} ({top_authors[0][1]} книг)"
 
         conn.close()
 
@@ -125,7 +160,9 @@ class Database:
             'total': total,
             'Хочу прочитать': stats.get('Хочу прочитать', 0),
             'Читаю': stats.get('Читаю', 0),
-            'Прочитано': stats.get('Прочитано', 0)
+            'Прочитано': read_count,
+            'read_percent': read_percent,
+            'top_authors_text': top_authors_text,
         }
 
     def get_book_by_id(self, book_id):

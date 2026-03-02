@@ -512,14 +512,17 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_keyboard()
         ),
         '📊 Статистика': lambda: update.message.reply_text(
-            f"📊 **Твоя статистика**\n\n"
-            f"📚 Всего книг: {stats['total']}\n"
-            f"🟢 Хочу прочитать: {stats['Хочу прочитать']}\n"
-            f"🟡 Читаю: {stats['Читаю']}\n"
-            f"✅ Прочитано: {stats['Прочитано']}",
+            (lambda stats: (
+                f"📊 **Твоя читательская статистика**\n\n"
+                f"📚 **Всего книг:** {stats['total']}\n"
+                f"🟢 **Хочу прочитать:** {stats['Хочу прочитать']}\n"
+                f"🟡 **Читаю сейчас:** {stats['Читаю']}\n"
+                f"✅ **Прочитано:** {stats['Прочитано']} ({stats['read_percent']}%)\n\n"
+                f"{stats['top_authors_text']}"
+            ))(db.get_book_stats(user.id)),
             parse_mode='Markdown',
             reply_markup=get_main_keyboard()
-        ) if (stats := db.get_book_stats(user.id)) else None,
+        ),
         '❓ Помощь': lambda: update.message.reply_text(
             "📖 **Как пользоваться:**\n\n"
             "• **Добавить книгу** — ввести название и автора\n"
@@ -543,8 +546,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await result
 
     return None
-
-
 
 
 def main():
