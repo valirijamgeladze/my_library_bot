@@ -31,6 +31,7 @@ user_states = {}
 # Хранилище для выбранных книг при массовом добавлении в категорию
 selected_books = {}  # key: f"{user_id}_{category_id}" -> set of book_ids
 
+category_pages = {}  # key: f"{user_id}_{category_id}" -> current_page
 def get_filter_name(filter_status):
     filters = {
         None: "📚 Все книги",
@@ -467,6 +468,27 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith('cat_toggle_'):
         await category_toggle_book(update, context)
 
+    # Навигация по страницам при массовом выборе
+    elif data.startswith('cat_book_page_'):
+        parts = data.split('_')
+        category_id = int(parts[3])
+        page = int(parts[4])
+        user_id = update.effective_user.id
+
+        key = f"{user_id}_{category_id}"
+        category_pages[key] = page
+
+        books = db.get_user_books(user_id)
+        total_pages = (len(books) + 4) // 5
+
+        await query.edit_message_text(
+            f"📚 **Выбери книги для добавления** (стр. {page + 1}/{total_pages})\n\n"
+            f"Отмечай книги, которые хочешь добавить в категорию.",
+            parse_mode='Markdown',
+            reply_markup=get_books_for_category_keyboard(
+                books, category_id, page, total_pages, selected_books.get(key, set())
+            )
+        )
     elif data.startswith('cat_add_selected_'):
         await category_add_selected(update, context)
 
@@ -899,17 +921,20 @@ async def category_add_books_start(update: Update, context: ContextTypes.DEFAULT
         )
         return
 
-    # Инициализируем множество выбранных книг
+    # Инициализируем множество выбранных книг и страницу
     key = f"{user_id}_{category_id}"
     selected_books[key] = set()
+    category_pages[key] = 0  # 👈 Начинаем с первой страницы
 
     total_pages = (len(books) + 4) // 5
 
     await query.edit_message_text(
-        f"📚 **Выбери книги для добавления**\n\n"
+        f"📚 **Выбери книги для добавления** (стр. 1/{total_pages})\n\n"
         f"Отмечай книги, которые хочешь добавить в категорию.",
         parse_mode='Markdown',
-        reply_markup=get_books_for_category_keyboard(books, category_id, 0, total_pages)
+        reply_markup=get_books_for_category_keyboard(
+            books, category_id, 0, total_pages, selected_books[key]
+        )
     )
 
 
@@ -927,19 +952,22 @@ async def category_toggle_book(update: Update, context: ContextTypes.DEFAULT_TYP
     if key not in selected_books:
         selected_books[key] = set()
 
+    # Отмечаем или снимаем отметку
     if book_id in selected_books[key]:
         selected_books[key].remove(book_id)
     else:
         selected_books[key].add(book_id)
 
+    # Получаем текущую страницу
+    current_page = category_pages.get(key, 0)
+
     # Обновляем клавиатуру
     books = db.get_user_books(user_id)
     total_pages = (len(books) + 4) // 5
 
-    # Получаем текущую страницу из callback_data или используем 0
     await query.edit_message_reply_markup(
         reply_markup=get_books_for_category_keyboard(
-            books, category_id, 0, total_pages, selected_books[key]
+            books, category_id, current_page, total_pages, selected_books[key]
         )
     )
 
@@ -970,6 +998,8 @@ async def category_add_selected(update: Update, context: ContextTypes.DEFAULT_TY
     # Очищаем временные данные
     if key in selected_books:
         del selected_books[key]
+    if key in category_pages:  # 👈 Очищаем и страницу
+        del category_pages[key]
 
     await query.edit_message_text(
         f"✅ {len(book_ids)} книг добавлено в категорию!",
@@ -977,7 +1007,6 @@ async def category_add_selected(update: Update, context: ContextTypes.DEFAULT_TY
             InlineKeyboardButton("📁 К категории", callback_data=f"category_view_{category_id}")
         ]])
     )
-
 
 async def book_manage_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Открывает меню управления категориями для конкретной книги"""

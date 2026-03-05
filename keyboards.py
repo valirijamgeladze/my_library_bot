@@ -165,10 +165,11 @@ def get_books_for_category_keyboard(books, category_id, page=0, total_pages=1, s
     keyboard = []
     start = page * 5
 
+    # Показываем книги на текущей странице
     for book in books[start:start + 5]:
         book_id = book[0]
-        title = book[1]
-        author = book[2] if len(book) > 2 else ""
+        title = book[2]  # Индекс 2 - название
+        author = book[3] if len(book) > 3 else ""  # Индекс 3 - автор
 
         author_text = f" — {author}" if author else ""
         display_text = f"{title}{author_text}"
@@ -180,7 +181,7 @@ def get_books_for_category_keyboard(books, category_id, page=0, total_pages=1, s
 
         keyboard.append([InlineKeyboardButton(f"{checkbox}{short_text}", callback_data=callback)])
 
-    # Навигация
+    # Кнопки навигации
     nav_buttons = []
     if page > 0:
         nav_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data=f"cat_book_page_{category_id}_{page - 1}"))
@@ -200,7 +201,6 @@ def get_books_for_category_keyboard(books, category_id, page=0, total_pages=1, s
     keyboard.append(action_row)
 
     return InlineKeyboardMarkup(keyboard)
-
 
 def get_color_choice_keyboard(category_id):
     """Клавиатура для выбора цвета категории"""
