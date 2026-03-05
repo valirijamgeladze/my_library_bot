@@ -79,6 +79,8 @@ def get_book_actions_keyboard(book_id, current_status):
     if status_buttons:
         keyboard.append(status_buttons)
 
+    keyboard.append([InlineKeyboardButton("🏷️ Управлять категориями", callback_data=f"book_categories_{book_id}")])
+
     keyboard.append([InlineKeyboardButton("✏️ Редактировать книгу", callback_data=f"edit_{book_id}")])
 
     keyboard.append([InlineKeyboardButton("🗑️ Удалить книгу", callback_data=f"delete_{book_id}")])
@@ -95,4 +97,151 @@ def get_delete_confirmation_keyboard(book_id):
             InlineKeyboardButton("❌ Нет", callback_data=f"cancel_delete_{book_id}")
         ]
     ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_categories_main_keyboard():
+    """Главное меню управления категориями"""
+    keyboard = [
+        [InlineKeyboardButton("📋 Список категорий", callback_data="categories_list")],
+        [InlineKeyboardButton("➕ Создать категорию", callback_data="category_create")],
+        [InlineKeyboardButton("📚 Книги без категорий", callback_data="books_without_cats")],
+        [InlineKeyboardButton("◀️ Назад в главное меню", callback_data="back_to_main")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_categories_list_keyboard(categories, page=0, total_pages=1):
+    """Клавиатура со списком категорий"""
+    keyboard = []
+
+    # Категории на текущей странице
+    start = page * 5
+    for cat in categories[start:start + 5]:
+        cat_id = cat[0]
+        name = cat[1]
+        color = cat[2]
+        count = cat[3]
+
+        button_text = f"{color} {name} ({count})"
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"category_view_{cat_id}")])
+
+    # Навигация
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data=f"cat_page_{page - 1}"))
+    if page < total_pages - 1:
+        nav_buttons.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"cat_page_{page + 1}"))
+
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+
+    keyboard.append([InlineKeyboardButton("➕ Создать категорию", callback_data="category_create")])
+    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="categories_menu")])
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_category_actions_keyboard(category_id):
+    """Клавиатура действий с категорией"""
+    keyboard = [
+        [
+            InlineKeyboardButton("✏️ Переименовать", callback_data=f"category_rename_{category_id}"),
+            InlineKeyboardButton("🎨 Сменить цвет", callback_data=f"category_color_{category_id}")
+        ],
+        [
+            InlineKeyboardButton("📚 Книги в категории", callback_data=f"category_books_{category_id}"),
+            InlineKeyboardButton("➕ Добавить книги", callback_data=f"category_add_books_{category_id}")
+        ],
+        [InlineKeyboardButton("🗑️ Удалить категорию", callback_data=f"category_delete_{category_id}")],
+        [InlineKeyboardButton("◀️ Назад к списку", callback_data="categories_list")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_books_for_category_keyboard(books, category_id, page=0, total_pages=1, selected=None):
+    """Клавиатура для выбора книг в категорию"""
+    if selected is None:
+        selected = set()
+
+    keyboard = []
+    start = page * 5
+
+    for book in books[start:start + 5]:
+        book_id = book[0]
+        title = book[1]
+        author = book[2] if len(book) > 2 else ""
+
+        author_text = f" — {author}" if author else ""
+        display_text = f"{title}{author_text}"
+        short_text = display_text[:30] + "..." if len(display_text) > 30 else display_text
+
+        # Отмечаем выбранные книги
+        checkbox = "✅ " if book_id in selected else ""
+        callback = f"cat_toggle_{category_id}_{book_id}"
+
+        keyboard.append([InlineKeyboardButton(f"{checkbox}{short_text}", callback_data=callback)])
+
+    # Навигация
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data=f"cat_book_page_{category_id}_{page - 1}"))
+    if page < total_pages - 1:
+        nav_buttons.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"cat_book_page_{category_id}_{page + 1}"))
+
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+
+    # Кнопки действий
+    action_row = []
+    if selected:
+        action_row.append(InlineKeyboardButton(f"✅ Добавить выбранные ({len(selected)})",
+                                               callback_data=f"cat_add_selected_{category_id}"))
+    action_row.append(InlineKeyboardButton("❌ Отмена", callback_data=f"category_view_{category_id}"))
+
+    keyboard.append(action_row)
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_color_choice_keyboard(category_id):
+    """Клавиатура для выбора цвета категории"""
+    colors = [
+        ["📁", "📘", "📗", "📕"],
+        ["🔴", "🟠", "🟡", "🟢"],
+        ["🔵", "🟣", "⚫", "⚪"],
+        ["❤️", "🧡", "💛", "💚"],
+        ["💙", "💜", "🖤", "🤍"]
+    ]
+
+    keyboard = []
+    for row in colors:
+        button_row = []
+        for color in row:
+            button_row.append(InlineKeyboardButton(color, callback_data=f"cat_setcolor_{category_id}_{color}"))
+        keyboard.append(button_row)
+
+    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data=f"category_view_{category_id}")])
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_book_categories_keyboard(book_id, categories, book_cats):
+    """Клавиатура для управления категориями книги"""
+    book_cats_set = set(book_cats)
+    keyboard = []
+
+    for cat in categories:
+        cat_id = cat[0]
+        name = cat[1]
+        color = cat[2]
+
+        # Отмечаем, если книга уже в этой категории
+        mark = "✅ " if cat_id in book_cats_set else ""
+        callback = f"book_toggle_cat_{book_id}_{cat_id}"
+
+        keyboard.append([InlineKeyboardButton(f"{mark}{color} {name}", callback_data=callback)])
+
+    keyboard.append([InlineKeyboardButton("➕ Создать новую категорию", callback_data=f"book_create_cat_{book_id}")])
+    keyboard.append([InlineKeyboardButton("✅ Готово", callback_data=f"book_back_{book_id}")])
+
     return InlineKeyboardMarkup(keyboard)
