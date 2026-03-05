@@ -104,8 +104,7 @@ def get_categories_main_keyboard():
     keyboard = [
         [InlineKeyboardButton("📋 Список категорий", callback_data="categories_list")],
         [InlineKeyboardButton("➕ Создать категорию", callback_data="category_create")],
-        [InlineKeyboardButton("📚 Книги без категорий", callback_data="books_without_cats")],
-        [InlineKeyboardButton("◀️ Назад в главное меню", callback_data="back_to_main")]
+        [InlineKeyboardButton("📚 Книги без категорий", callback_data="books_without_cats")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
