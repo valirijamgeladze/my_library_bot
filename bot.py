@@ -592,12 +592,10 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
         '📚 Мои книги': lambda: show_books(update, context),
         '🏷️ Категории': lambda: update.message.reply_text(
-            "📁 **Категории**\n\n"
-            "Загружаю меню категорий...",
+            "📁 **Управление категориями**\n\n"
+            "Выбери действие:",
             parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("📁 Открыть меню категорий", callback_data="categories_menu")
-            ]])
+            reply_markup=get_categories_main_keyboard()
         ),
         '📊 Статистика': lambda: update.message.reply_text(
             (lambda stats: (
