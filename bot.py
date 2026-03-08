@@ -469,6 +469,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await category_toggle_book(update, context)
 
     # Навигация по страницам при массовом выборе
+    # Навигация по страницам при массовом выборе
     elif data.startswith('cat_book_page_'):
         parts = data.split('_')
         category_id = int(parts[3])
@@ -478,15 +479,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         key = f"{user_id}_{category_id}"
         category_pages[key] = page
 
-        books = db.get_user_books(user_id)
-        total_pages = (len(books) + 4) // 5
+        # Получаем доступные книги
+        all_books = db.get_user_books(user_id)
+        books_in_category = db.get_books_by_category(user_id, category_id)
+        books_in_category_ids = {book[0] for book in books_in_category}
+        available_books = [book for book in all_books if book[0] not in books_in_category_ids]
+
+        total_pages = (len(available_books) + 4) // 5
 
         await query.edit_message_text(
             f"📚 **Выбери книги для добавления** (стр. {page + 1}/{total_pages})\n\n"
-            f"Отмечай книги, которые хочешь добавить в категорию.",
+            f"Отмечай книги, которые хочешь добавить в категорию:",
             parse_mode='Markdown',
             reply_markup=get_books_for_category_keyboard(
-                books, category_id, page, total_pages, selected_books.get(key, set())
+                available_books, category_id, page, total_pages, selected_books.get(key, set())
             )
         )
     elif data.startswith('cat_add_selected_'):
@@ -913,10 +919,10 @@ async def category_add_books_start(update: Update, context: ContextTypes.DEFAULT
     category_id = int(query.data.split('_')[3])
     user_id = update.effective_user.id
 
-    # Получаем все книги пользователя
-    books = db.get_user_books(user_id)
+    # Получаем ВСЕ книги пользователя
+    all_books = db.get_user_books(user_id)
 
-    if not books:
+    if not all_books:
         await query.edit_message_text(
             "📚 У тебя пока нет книг!",
             reply_markup=InlineKeyboardMarkup([[
@@ -925,19 +931,35 @@ async def category_add_books_start(update: Update, context: ContextTypes.DEFAULT
         )
         return
 
-    # Инициализируем множество выбранных книг и страницу
+    # Получаем книги, которые УЖЕ в категории
+    books_in_category = db.get_books_by_category(user_id, category_id)
+    books_in_category_ids = {book[0] for book in books_in_category}
+
+    # 👇 Оставляем только те книги, которых ещё нет в категории
+    available_books = [book for book in all_books if book[0] not in books_in_category_ids]
+
+    if not available_books:
+        await query.edit_message_text(
+            "📚 Все твои книги уже в этой категории!",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("◀️ Назад", callback_data=f"category_view_{category_id}")
+            ]])
+        )
+        return
+
+    # Инициализируем множество выбранных книг
     key = f"{user_id}_{category_id}"
     selected_books[key] = set()
-    category_pages[key] = 0  # 👈 Начинаем с первой страницы
+    category_pages[key] = 0
 
-    total_pages = (len(books) + 4) // 5
+    total_pages = (len(available_books) + 4) // 5
 
     await query.edit_message_text(
         f"📚 **Выбери книги для добавления** (стр. 1/{total_pages})\n\n"
-        f"Отмечай книги, которые хочешь добавить в категорию.",
+        f"Отмечай книги, которые хочешь добавить в категорию:",
         parse_mode='Markdown',
         reply_markup=get_books_for_category_keyboard(
-            books, category_id, 0, total_pages, selected_books[key]
+            available_books, category_id, 0, total_pages, selected_books[key]
         )
     )
 
@@ -955,6 +977,7 @@ async def category_toggle_book(update: Update, context: ContextTypes.DEFAULT_TYP
     key = f"{user_id}_{category_id}"
     if key not in selected_books:
         selected_books[key] = set()
+        category_pages[key] = 0
 
     # Отмечаем или снимаем отметку
     if book_id in selected_books[key]:
@@ -965,13 +988,17 @@ async def category_toggle_book(update: Update, context: ContextTypes.DEFAULT_TYP
     # Получаем текущую страницу
     current_page = category_pages.get(key, 0)
 
-    # Обновляем клавиатуру
-    books = db.get_user_books(user_id)
-    total_pages = (len(books) + 4) // 5
+    # Получаем доступные книги (все книги минус уже в категории)
+    all_books = db.get_user_books(user_id)
+    books_in_category = db.get_books_by_category(user_id, category_id)
+    books_in_category_ids = {book[0] for book in books_in_category}
+    available_books = [book for book in all_books if book[0] not in books_in_category_ids]
+
+    total_pages = (len(available_books) + 4) // 5
 
     await query.edit_message_reply_markup(
         reply_markup=get_books_for_category_keyboard(
-            books, category_id, current_page, total_pages, selected_books[key]
+            available_books, category_id, current_page, total_pages, selected_books[key]
         )
     )
 
@@ -995,18 +1022,28 @@ async def category_add_selected(update: Update, context: ContextTypes.DEFAULT_TY
                 InlineKeyboardButton("◀️ Назад", callback_data=f"category_view_{category_id}")
             ]])
         )
+        # Очищаем временные данные
+        if key in selected_books:
+            del selected_books[key]
+        if key in category_pages:
+            del category_pages[key]
         return
 
+    # Добавляем книги в категорию
     db.add_books_to_category_mass(list(book_ids), category_id)
+
+    # Получаем обновлённое количество
+    books_in_category = db.get_books_by_category(user_id, category_id)
 
     # Очищаем временные данные
     if key in selected_books:
         del selected_books[key]
-    if key in category_pages:  # 👈 Очищаем и страницу
+    if key in category_pages:
         del category_pages[key]
 
     await query.edit_message_text(
-        f"✅ {len(book_ids)} книг добавлено в категорию!",
+        f"✅ {len(book_ids)} книг добавлено в категорию!\n"
+        f"📚 Всего книг в категории: {len(books_in_category)}",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("📁 К категории", callback_data=f"category_view_{category_id}")
         ]])

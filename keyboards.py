@@ -168,15 +168,15 @@ def get_books_for_category_keyboard(books, category_id, page=0, total_pages=1, s
     # Показываем книги на текущей странице
     for book in books[start:start + 5]:
         book_id = book[0]
-        title = book[2]  # Индекс 2 - название
-        author = book[3] if len(book) > 3 else ""  # Индекс 3 - автор
+        title = book[2]
+        author = book[3] if len(book) > 3 else ""
 
         author_text = f" — {author}" if author else ""
         display_text = f"{title}{author_text}"
         short_text = display_text[:30] + "..." if len(display_text) > 30 else display_text
 
         # Отмечаем выбранные книги
-        checkbox = "✅ " if book_id in selected else ""
+        checkbox = "✅ " if book_id in selected else "⬜ "
         callback = f"cat_toggle_{category_id}_{book_id}"
 
         keyboard.append([InlineKeyboardButton(f"{checkbox}{short_text}", callback_data=callback)])
