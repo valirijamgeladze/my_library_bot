@@ -492,7 +492,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith('cat_add_selected_'):
         await category_add_selected(update, context)
 
-        # Управление категориями книги
     elif data.startswith('book_categories_'):
         await book_manage_categories(update, context)
 
@@ -506,7 +505,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         book_id = int(data.split('_')[2])
         await show_book_details(update, context, book_id)
 
-    # Навигация
+    # Просмотр всех книг в категории
+    elif data.startswith('category_books_'):
+        await show_category_books(update, context)
+
+    # Навигация по страницам книг категории
+    elif data.startswith('cat_books_page_'):
+        await show_category_books(update, context)
+
     elif data in ['back_to_list', 'back_to_all']:
         new_filter = user_states.get(user_id, {}).get('filter', None) if data == 'back_to_list' else None
         if data == 'back_to_all':
@@ -655,8 +661,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return None
 
-
-# ========== НОВЫЕ ФУНКЦИИ ДЛЯ КАТЕГОРИЙ ==========
 
 async def categories_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Главное меню категорий"""
@@ -1142,6 +1146,85 @@ async def show_books_without_categories(update: Update, context: ContextTypes.DE
         ]])
     )
 
+
+async def show_category_books(update: Update, context: ContextTypes.DEFAULT_TYPE, page=0):
+    """Показывает все книги в категории с пагинацией"""
+    query = update.callback_query
+
+    # Получаем category_id из callback_data
+    # data может быть "category_books_5" или "cat_books_page_5_1"
+    parts = query.data.split('_')
+
+    if parts[0] == 'category' and parts[1] == 'books':
+        # Формат: category_books_5
+        category_id = int(parts[2])
+    elif parts[0] == 'cat' and parts[1] == 'books' and parts[2] == 'page':
+        # Формат: cat_books_page_5_1
+        category_id = int(parts[3])
+        page = int(parts[4])
+    else:
+        await query.edit_message_text("❌ Ошибка формата данных")
+        return
+
+    user_id = update.effective_user.id
+
+    # Получаем книги в категории
+    books = db.get_books_by_category(user_id, category_id)
+    category = db.get_category_by_id(category_id)
+
+    if not books:
+        await query.edit_message_text(
+            f"📚 В категории {category[2]} пока нет книг",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("◀️ Назад", callback_data=f"category_view_{category_id}")
+            ]])
+        )
+        return
+
+    # Пагинация по 10 книг
+    books_per_page = 10
+    total_pages = (len(books) + books_per_page - 1) // books_per_page
+
+    # Формируем сообщение
+    message = f"📚 **Книги в категории {category[2]}** (стр. {page + 1}/{total_pages})\n\n"
+
+    start = page * books_per_page
+    end = min(start + books_per_page, len(books))
+
+    for i, book in enumerate(books[start:end], start=start + 1):
+        title = book[2]
+        author = book[3]
+        status = book[4]
+
+        # Эмодзи статуса
+        status_emoji = {
+            'Хочу прочитать': '🟢',
+            'Читаю': '🟡',
+            'Прочитано': '✅'
+        }.get(status, '📖')
+
+        author_text = f" — {author}" if author else ""
+        message += f"{i}. {status_emoji} {title}{author_text}\n"
+
+    # Кнопки навигации
+    keyboard = []
+    nav_buttons = []
+
+    if page > 0:
+        nav_buttons.append(InlineKeyboardButton("◀️ Назад", callback_data=f"cat_books_page_{category_id}_{page - 1}"))
+    if page < total_pages - 1:
+        nav_buttons.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"cat_books_page_{category_id}_{page + 1}"))
+
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+
+    keyboard.append([InlineKeyboardButton("◀️ К категории", callback_data=f"category_view_{category_id}")])
+
+    await query.edit_message_text(
+        message,
+        parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 def main():
     """Запуск бота"""
